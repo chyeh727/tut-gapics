@@ -1,0 +1,52 @@
+* {
+    margin: 0;
+    padding: 0;
+}
+body {
+    overflow: hidden;
+}
+
+#c, #d {
+    float: left;
+    margin: 7px;
+    border: 1px solid black;
+}
+
+.ctrl {
+    height: 80px;
+    color: white;
+    font-size: 18px;
+    font-family: sans-serif;
+}
+
+#i {
+    display: none;
+}
+#i + label,
+#start {
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+    height: 100%;
+    width: 50%;
+    text-align: center;
+    display: block;
+    float: left;
+    line-height: 80px;
+    cursor: pointer;
+}
+
+#i + label {
+    background-color: black;
+}
+#i:focus + label,
+#i + label:hover {
+    background-color: #f2784b;
+}
+
+#start {
+    background-color: #6c7a89;
+}
+#start:hover {
+    background-color: #f2784b;
+}
