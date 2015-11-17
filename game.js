@@ -69,7 +69,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Returns the negative value of the average difference in pixel values.
+    // Returns the negative value of the difference in pixel values.
+    // We do not bother to calculate the average since the drawing
+    // area is always the same size.
     let calculateFitness = function() {
         let cImgData = cctx.getImageData(dx, dy, dw, dh);
         let dImgData = dctx.getImageData(dx, dy, dw, dh);
@@ -86,21 +88,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let sortGenePoolByFitness = function() {
         genePool.sort(function(a, b) {
-            if (a.fitness < b.fitness) {
-                return 1;
-            }
-            return 0;
+            return b.fitness - a.fitness;
         });
+        /*
+        for (let i = 1, len = genePool.length; i < len; i++) {
+            if (genePool[i].fitness > genePool[i - 1].fitness) {
+                for (let j = 0; j < len; j++) {
+                    console.log(genePool[j].fitness);
+                }
+                throw 1;
+            }
+        }*/
     };
 
-    let lengthMutationRate = 0.3;
-    let geneMutationRate = 0.02;
-    let populationSize = 100;
-    let lengthMutationUnit = 7;
+    let geneMutationRate = 0.3;
+    let populationSize = 40;
+    let q = 10;
+    let half = 27;
 
     let getRandomNumber = function(min, max) {
         let poss = max - min + 1;
         return Math.floor(min) + Math.floor(Math.random() * poss);
+    };
+
+    let mutateInRange = function(oldValue, mn, mx) {
+        let value = oldValue * (0.8 + Math.random() * 0.4);
+        if (value > mx)
+            return mx;
+        if (value < mn)
+            return mn;
+        return value;
     };
 
     class Gene {
@@ -109,21 +126,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 cfg = {};
             this.cx = cfg.cx || getRandomNumber(dx, dx + dw);
             this.cy = cfg.cy || getRandomNumber(dy, dy + dh);
-            this.r = cfg.r || getRandomNumber(1, maxr / 2);
+            this.r = cfg.r || getRandomNumber(1, maxr / 4);
             this.rr = cfg.rr || getRandomNumber(0, 255);
             this.gg = cfg.gg || getRandomNumber(0, 255); 
             this.bb = cfg.bb || getRandomNumber(0, 255);
-            this.aa = cfg.aa || Math.random() / 8;
+            this.aa = cfg.aa || Math.random() / 1.5;
         }
 
         mutate() {
-            this.cx = getRandomNumber(dx, dx + dw);
-            this.cy = getRandomNumber(dy, dy + dh);
-            this.r = getRandomNumber(1, maxr / 2);
-            this.rr = getRandomNumber(0, 255);
-            this.gg = getRandomNumber(0, 255);
-            this.gg = getRandomNumber(0, 255);
-            this.aa = Math.random() / 8;
+            this.cx = mutateInRange(this.cx, dx, dx + dw);
+            this.cy = mutateInRange(this.cy, dy, dy + dh);
+            this.r = mutateInRange(this.r, 1, maxr / 4);
+            this.rr = mutateInRange(this.rr, 0, 255);
+            this.gg = mutateInRange(this.gg, 0, 255); 
+            this.bb = mutateInRange(this.bb, 0, 255);
+            this.aa = mutateInRange(this.aa, 0.01, 0.7);
         }
 
         getCopy() {
@@ -140,23 +157,27 @@ document.addEventListener('DOMContentLoaded', function() {
         /* Takes half of each */
         mateWith(other) {
             let newGenome = new Genome();
-            for (let i = 0, len = this.genes.length; i <= len / 2; i++) {
-                newGenome.genes.push(this.genes[i].getCopy());
-            }
-            for (let len = other.genes.length, i = Math.floor(len / 2); i < len; i++) {
-                newGenome.genes.push(other.genes[i].getCopy());
+            let thisLength = this.genes.length,
+                otherLength = other.genes.length;
+            let len = Math.max(thisLength, otherLength);
+
+            for (let i = 0; i < len; i++) {
+                if (i >= thisLength) {
+                    newGenome.genes.push(other.genes[i].getCopy());
+                } else if (i >= otherLength) {
+                    newGenome.genes.push(this.genes[i].getCopy());
+                } else {
+                    if (Math.random() <= 0.5) {
+                        newGenome.genes.push(other.genes[i].getCopy());
+                    } else {
+                        newGenome.genes.push(this.genes[i].getCopy());
+                    }
+                }
             }
             return newGenome;
         }
 
-        /* Length and gene mutation */
         mutate() {
-            // mutate length
-            if (Math.random() <= lengthMutationRate) {
-                for (let i = 0; i < lengthMutationUnit; i++) {
-                    this.genes.push(new Gene());
-                }
-            }
             // mutate gene
             for (let i = 0, len = this.genes.length; i < len; i++) {
                 if (Math.random() <= geneMutationRate) {
@@ -192,26 +213,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    let oldFitness = null,
+        roundsWithoutImprovement = 0;
+
     let breedNextGeneration = function() {
         let tmpGenePool = [];
         let len = genePool.length;
-        let h = Math.floor(len / 2);
+        let lengthen = false;
+        if (roundsWithoutImprovement >= 19) {
+            roundsWithoutImprovement = 0;
+            lengthen = true;
+        }
         for (let i = 0; i < len; i++) {
             var tmp;
-            if (i <= h) {
+            if (i <= q) {
                 tmp = genePool[i];
+            } else if (i <= half) {
+                tmp = genePool[i];
+                tmp.mutate();
             } else {
                 tmp = genePool[i].mateWith(
-                        tmpGenePool[Math.floor(Math.random() * (h + 1))]
+                        tmpGenePool[Math.floor(Math.random() * (half + 1))]
                 );
+                tmp.mutate();
             }
-            tmp.mutate();
+            if (lengthen)
+                tmp.genes.push(new Gene());
             tmpGenePool.push(tmp);
         }
         genePool = tmpGenePool;
     };
 
-    let to = null;
     let genNumber = 0;
     let runGA = function(maxGen) {
         genNumber++;
@@ -223,14 +255,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         sortGenePoolByFitness();
+        if (oldFitness === null || genePool[0].fitness > oldFitness) {
+            oldFitness = genePool[0].fitness;
+            roundsWithoutImprovement = 0;
+        } else {
+            oldFitness = genePool[0].fitness;
+            roundsWithoutImprovement++;
+        }
+
+        // TODO: remove me
+        console.log(`Rounds without improvement = ${roundsWithoutImprovement}`);
+
         genePool[0].showPhenotype();
 
         breedNextGeneration();
 
         if (genNumber < maxGen) {
-            to = setTimeout(function() {
+            setTimeout(function() {
                 runGA(maxGen);
-            }, 1000 * 1);
+            }, 50);
         }
     };
 
@@ -240,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function() {
             algoRunning = true;
             initializeGenePool();
             // Number of rounds
-            runGA(200);
+            runGA(100000);
         }
     });
 
